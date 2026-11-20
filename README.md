@@ -71,21 +71,6 @@ The rules of the client path are section 11 of [`coding/RULEBOOK.md`](coding/RUL
 
 ## For the maintainer: setting up a client
 
-**Setting up the submit key** (once; renew before it expires). The client's assistant sends its list with a key of
-yours that only works for this repository (rulebook 11.7).
-1. Protect the main branch: on GitHub, this repository's **Settings → Rules → Rulesets → New branch ruleset**. Target
-   the default branch; turn on "Require a pull request before merging" (0 approvals, so you can merge your own),
-   "Restrict deletions" and "Block force pushes"; leave the bypass list empty; set it to Active. Nothing then reaches
-   `main` without a pull request that you merge, also not with the key.
-2. Create the key: your **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new
-   token**. Repository access: only this repository. Permissions: Contents "Read and write", Pull requests "Read and
-   write". Expiration: for example 90 days.
-3. Save the key in a text file `institution_mapping_key.txt` and send it to the client **separately from the email
-   below**, so that it is not pasted into every chat. If it leaks, delete it on the same page and send a new one.
-
-The pull requests appear under your name, with the title "Client list unmapped_institutions_…". Merging one puts the
-list in `input/` for the next run (rulebook 1.4).
-
 **The email to the client.** The client pastes it into their AI assistant each time, so it is written for both:
 
 > Subject: Coding the institution names in your spreadsheets
