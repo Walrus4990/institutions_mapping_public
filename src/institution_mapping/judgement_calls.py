@@ -12,9 +12,17 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import precedents
 from .pipeline import CODING, OUTPUT, REGISTRIES
 
-COLUMNS = ["answer", "flag", "raw_institution", "country", "learners", "institution_id", "coded_name", "why_check"]
+COLUMNS = ["gid", "answer", "flag", "raw_institution", "country", "learners", "institution_id", "coded_name"]
+COLUMNS += ["why_check", "rules", "precedent"]
+RULES = {  # flag -> the rulebook rules a proposal rests on
+    "acronym": "step 3 (acronyms), 5.2 (an acronym is never coded abroad)",
+    "abroad": "5.2 (records abroad), 6.1 (programmes run abroad), 6.4 (international organisations)",
+    "owner": "rule 3a (owner, not organisation), 6.6 (institutions in their own right), 6.7 (run by an NGO)",
+    "two organisations": "5.5 (two organisations named; a university and its teaching hospital: 6.3), 6.1-6.3",
+}
 OWNER_WORDS = re.compile(
     r"\b(catholic|anglican|lutheran|adventist|methodist|baptist|presbyterian|pentecostal|evangelical|mission|missionary"
     r"|diocese|diocesan|church|ccap|elct|christian|islamic|muslim|red cross|red crescent|ngo)\b",
@@ -101,8 +109,9 @@ def already_judged():
     return set(zip(d.raw_institution, d.country))
 
 
-def draft(m, home, international, local_parent_rows, judged):
-    """One row per flagged mapping row (the first flag that applies, in the order of rule 9.5)."""
+def draft(m, home, international, local_parent_rows, judged, precedents=None):
+    """One row per flagged mapping row (the first flag that applies, in the order of rule 9.5), with the rules the
+    proposal rests on and, with `precedents` (precedents.Precedents), how similar answers were coded before."""
     rows = []
     for r in m[m.status == "coding complete"].itertuples(index=False):
         if (r.raw_institution, r.country) in judged:
@@ -114,13 +123,17 @@ def draft(m, home, international, local_parent_rows, judged):
             ("two organisations", two_organisations(r)),
         ):
             if why:
+                before = precedents.summary(r.raw_institution, r.country, r.institution_id) if precedents else ""
                 rows.append(
-                    ["", flag, r.raw_institution, r.country, r.learners, r.institution_id, r.canonical_name, why]
+                    [0, "", flag, r.raw_institution, r.country, r.learners, r.institution_id, r.canonical_name, why]
+                    + [RULES[flag], before]
                 )
                 break
     d = pd.DataFrame(rows, columns=COLUMNS)
     d["n"] = pd.to_numeric(d.learners, errors="coerce").fillna(0)
-    return d.sort_values(["flag", "n"], ascending=[True, False]).drop(columns="n")
+    d = d.sort_values(["flag", "n"], ascending=[True, False]).drop(columns="n")
+    d["gid"] = range(1, len(d) + 1)  # row numbers, for tools/add_decisions.py
+    return d
 
 
 def run(out_dir, every_row=False):
@@ -133,7 +146,7 @@ def run(out_dir, every_row=False):
     lp = pd.read_csv(REGISTRIES / "local_parents.csv", dtype=str, keep_default_na=False)
     names = set(zip(lp.name, lp.country))
     local_parent_rows = {(a, c) for a, c, n in zip(m.raw_institution, m.country, m.canonical_name) if (n, c) in names}
-    d = draft(rows, homes(out), internationals(), local_parent_rows, already_judged())
+    d = draft(rows, homes(out), internationals(), local_parent_rows, already_judged(), precedents.load(out))
     d.to_csv(out / "judgement_calls.csv", index=False)
     print(f"rows considered: {len(rows)} ({'every row' if every_row else 'new or coded differently'})")
     print(d.flag.value_counts().to_string() if len(d) else "no judgement calls")

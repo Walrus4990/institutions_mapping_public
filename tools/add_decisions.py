@@ -1,14 +1,18 @@
 """Add review and web-search decisions to decisions.csv (batch `decisions`, rulebook step 7), from a short worksheet.
-Usage: python tools/add_decisions.py GROUPS_CSV WORKSHEET ROR_DIR LEDGER_CSV DATE [--dry]
-  GROUPS_CSV  output of group_uncoded.py with a `gid` column (row number)
+Usage: python tools/add_decisions.py GROUPS_CSV WORKSHEET ROR_DIR LEDGER_CSV DATE [--dry] [--to DECISIONS_FILE]
+  GROUPS_CSV  a list with a `gid` column (row number): OUT_DIR/worklist.csv, or OUT_DIR/judgement_calls.csv
   WORKSHEET   one decision per line, fields separated by " | ":
-                 GIDS | TARGET | NAME | ORG_TYPE | ORG_COUNTRY | RATIONALE_TYPE | SOURCE | NOTE
+                 GIDS | TARGET | NAME | ORG_TYPE | ORG_COUNTRY | RATIONALE_TYPE | SOURCE | NOTE [| override]
               GIDS: one or more row numbers, "12,15" or "12-15", or "c<cluster>" for every row of that cluster
                     in the country of the first row named before it ("NG c31" is also accepted)
               TARGET, NAME, ORG_TYPE, ORG_COUNTRY: as in stages/apply_decisions.py (ROR id, TH:<id>, LOCAL, NS, NA,
                     TYPE:<org_type>, UNC); empty fields allowed
-              RATIONALE_TYPE: source | rule | searched, not found | reason given
+              RATIONALE_TYPE: source | rule | searched, not found | reason given | client decision |
+                    human-review decision
+              override: the row is decided already and this decision corrects it (a judgement call)
               Lines starting with # and empty lines are ignored.
+  --to        write the decisions to a client session's decisions file in input/ (rulebook 9.6), numbered
+              <file name>-0001, ..., instead of appending them to LEDGER_CSV (D-numbers)
 Checks before anything is written: every row exists and is still undecided in the ledger; a ROR target is an active
 record; a ROR record in another country needs 'rule 5.2' in the note, or is refused later by apply_decisions.py;
 LOCAL and TH: need a name; every decision has a rationale type and a source or note.
@@ -18,11 +22,13 @@ The evidence written to the mapping is the note.
 import csv
 import re
 import sys
+from pathlib import Path
 
 import pandas as pd
 
-RATIONALE_TYPES = {"source", "rule", "searched, not found", "reason given"}
+RATIONALE_TYPES = {"source", "rule", "searched, not found", "reason given", "client decision", "human-review decision"}
 ROR_ID = re.compile(r"0[a-z0-9]{8}")
+BY_A_PERSON = {"client decision", "human-review decision"}  # a ROR ID they set has rule code ROR-CLIENT
 
 
 def gids(spec, last_cc, groups):
@@ -59,9 +65,21 @@ def target_error(target, r, note, orgs):
     return ""
 
 
+def field_error(target, name, rtype, source, note):
+    """What is missing from a worksheet line ('' if nothing): a name for LOCAL and TH:, a known rationale type, a
+    source or a note."""
+    if (target == "LOCAL" or target.startswith("TH:")) and not name:
+        return f"{target} needs a name"
+    if rtype not in RATIONALE_TYPES:
+        return f"rationale type {rtype!r}"
+    if not (source or note):
+        return "no source or note"
+    return ""
+
+
 def decision(did, r, fields, date):
     """One row of decisions.csv (batch `decisions`) for row r of the groups."""
-    target, name, otype, ocountry, rtype, source, note = fields
+    target, name, otype, ocountry, rtype, source, note, extra = fields
     rid = target[3:] if target.startswith("TH:") else target
     return dict(
         id=did,
@@ -77,25 +95,29 @@ def decision(did, r, fields, date):
         evidence="",
         source=source,
         note=note,
-        extra="",
+        extra=extra,
         date=date,
         rationale_type=rtype,
         rationale=note or source,
-        rule_code="",
+        rule_code="ROR-CLIENT" if ROR_ID.fullmatch(rid) and rtype in BY_A_PERSON else "",  # rulebook 3.5
         evidence_text=note or source,
     )
 
 
-def read_worksheet(lines, groups, orgs, decided, next_id, date):
-    """The decisions of a worksheet, and every error found (nothing is written if there is one)."""
+def read_worksheet(lines, groups, orgs, decided, new_id, date):
+    """The decisions of a worksheet, and every error found (nothing is written if there is one). new_id(n) gives
+    the ID of the n-th new decision."""
     rows, errors, seen, last_cc = [], [], set(), ""
     for ln, line in enumerate(lines, 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         f = [x.strip() for x in line.split(" | ")]
-        f += [""] * (8 - len(f))
-        spec, fields = f[0], f[1:8]
-        target, name, _, _, rtype, source, note = fields
+        f += [""] * (9 - len(f))
+        spec, fields = f[0], f[1:9]
+        target, name, _, _, rtype, source, note, extra = fields
+        if extra not in ("", "override"):
+            errors.append(f"line {ln}: the ninth field is 'override' or nothing, not {extra!r}")
+            continue
         ids = gids(spec, last_cc, groups)
         if not ids:
             errors.append(f"line {ln}: no rows for {spec!r}")
@@ -107,7 +129,7 @@ def read_worksheet(lines, groups, orgs, decided, next_id, date):
             r = groups.loc[gid]
             last_cc = r.country
             key = (r.raw_institution, r.country)
-            if key in decided or key in seen:
+            if key in seen or (key in decided and extra != "override"):
                 errors.append(f"line {ln}: row {gid} already has a decision")
                 continue
             seen.add(key)
@@ -117,33 +139,35 @@ def read_worksheet(lines, groups, orgs, decided, next_id, date):
             elif why:
                 errors.append(f"line {ln}: {why}")
                 continue
-            if (target == "LOCAL" or target.startswith("TH:")) and not name:
-                errors.append(f"line {ln}: {target} needs a name")
+            why = field_error(target, name, rtype, source, note)
+            if why:
+                errors.append(f"line {ln}: {why}")
                 continue
-            if rtype not in RATIONALE_TYPES:
-                errors.append(f"line {ln}: rationale type {rtype!r}")
-                continue
-            if not (source or note):
-                errors.append(f"line {ln}: no source or note")
-                continue
-            rows.append(decision(f"D{next_id:05d}", r, fields, date))
-            next_id += 1
+            rows.append(decision(new_id(len(rows) + 1), r, fields, date))
     return rows, errors
 
 
 def main(argv):
-    """Check the worksheet against the groups, the ROR snapshot and the ledger; append the decisions unless --dry
-    or an error was found. Returns the exit code."""
+    """Check the worksheet against the groups, the ROR snapshot and the ledger (and the decisions file of --to);
+    write the decisions unless --dry or an error was found. Returns the exit code."""
     groups_csv, worksheet, ror_dir, ledger_csv, date = argv[:5]
+    to = Path(argv[argv.index("--to") + 1]) if "--to" in argv else None
     groups = pd.read_csv(groups_csv, keep_default_na=False, dtype=str).set_index("gid")
     orgs = pd.read_csv(f"{ror_dir}/ror_orgs.csv", keep_default_na=False, dtype=str).set_index("ror_id")
     led = pd.read_csv(ledger_csv, keep_default_na=False, dtype=str)
     mine = led[led.batch == "decisions"]
+    if to is not None and to.exists():
+        mine = pd.concat([mine, pd.read_csv(to, keep_default_na=False, dtype=str)])
     decided = set(zip(mine.raw_institution, mine.country))
-    next_id = max(int(x[1:]) for x in led.id) + 1
+    if to is None:
+        first = max(int(x[1:]) for x in led.id) + 1
+        new_id = lambda n: f"D{first + n - 1:05d}"  # noqa: E731
+    else:
+        done = len(pd.read_csv(to, dtype=str)) if to.exists() else 0
+        new_id = lambda n: f"{to.stem}-{done + n:04d}"  # noqa: E731
     with open(worksheet, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
-    rows, errors = read_worksheet(lines, groups, orgs, decided, next_id, date)
+    rows, errors = read_worksheet(lines, groups, orgs, decided, new_id, date)
     if errors:
         print("NOT WRITTEN:", len(errors), "errors")
         print("\n".join(errors[:60]))
@@ -151,11 +175,15 @@ def main(argv):
     kinds = [r["target"] if not re.fullmatch(r"(TH:)?0[a-z0-9]{8}", r["target"]) else "ROR" for r in rows]
     print("decisions:", len(rows), "| by target:", pd.Series(kinds).value_counts().to_dict())
     if "--dry" not in argv:
-        with open(ledger_csv, "a", encoding="utf-8", newline="") as fh:
+        target = to or Path(ledger_csv)
+        new_file = not target.exists()
+        with open(target, "a", encoding="utf-8", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=list(led.columns), lineterminator="\n")
+            if new_file:
+                w.writeheader()
             for r in rows:
                 w.writerow(r)
-        print("written to", ledger_csv)
+        print("written to", target)
     return 0
 
 

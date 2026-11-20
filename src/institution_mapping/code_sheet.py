@@ -31,6 +31,7 @@ ADDED = ["canonical_name", "institution_id", "norhed", "coding_status"]
 CODED = "coded"
 NOT_IDENTIFIED = "not identified"
 NOT_IN_MAPPING = "not in mapping"
+LEFT_OFF = "not coded: left off the list"  # with a session's mapping: an answer the client took off the list
 COUNTRY_NEEDED = "country needed"
 PERSONAL = "personal data, not coded"
 NO_ANSWER = "no answer"
@@ -263,14 +264,20 @@ def outcome(r):
     return r.status, r.institution_id, no_id_type
 
 
-def published_mapping():
-    """The mapping sheet of the workbook in output/ (as text), and its file name."""
-    files = sorted(OUTPUT.glob("institution_mapping_*.xlsx"))
-    if not files:
-        raise Stop(
-            "the published mapping (output/institution_mapping_*.xlsx) is missing: download the repository again"
-        )
-    return pd.read_excel(files[-1], sheet_name="mapping", dtype=str, keep_default_na=False), files[-1].name
+def published_mapping(workbook=None):
+    """The mapping sheet (as text) and the file name of a mapping workbook: by default the published one in output/;
+    a client session gives its own run's workbook (rule 11.3)."""
+    if workbook is None:
+        files = sorted(OUTPUT.glob("institution_mapping_*.xlsx"))
+        if not files:
+            raise Stop(
+                "the published mapping (output/institution_mapping_*.xlsx) is missing: download the repository again"
+            )
+        workbook = files[-1]
+    workbook = Path(workbook)
+    if not workbook.exists():
+        raise Stop(f"the mapping workbook {workbook} does not exist: run the mapping first")
+    return pd.read_excel(workbook, sheet_name="mapping", dtype=str, keep_default_na=False), workbook.name
 
 
 @dataclass
@@ -360,8 +367,9 @@ def check(path, column, country_column, sheet_name, header_row, mapping_countrie
     return job
 
 
-def code(job, mapping):
-    """Rulebook 11.3-11.5: the four values per row, and the answers not in the mapping."""
+def code(job, mapping, session=False):
+    """Rulebook 11.3-11.5: the four values per row, and the answers not in the mapping. With a session's mapping
+    (session), an answer it does not hold is one the client took off the list (a person's name): LEFT_OFF."""
     codes, missing = {}, []
     for n, answer, country in job.rows:
         if not answer:
@@ -370,7 +378,9 @@ def code(job, mapping):
             codes[n] = ("", "", "", PERSONAL)
         else:
             codes[n] = mapping.lookup(answer, country)
-            if codes[n][3] == NOT_IN_MAPPING:
+            if codes[n][3] == NOT_IN_MAPPING and session:
+                codes[n] = ("", "", "", LEFT_OFF)
+            elif codes[n][3] == NOT_IN_MAPPING:
                 missing.append((answer, country))
     return codes, missing
 
@@ -388,14 +398,18 @@ def unmapped_table(missing):
     return t.sort_values(["learners", "raw institution"], ascending=[False, True], ignore_index=True)
 
 
-def write_outputs(job, codes, missing, out, stem, log):
-    """The coded copy of the sheet, and the list of answers not in the mapping (if any)."""
+def write_outputs(job, codes, missing, out, stem, log, session=False):
+    """The coded copy of the sheet, and the list of answers not in the mapping (if any; never with a session's
+    mapping, whose list was written before)."""
     coded = out / f"{stem}_coded{job.sheet.path.suffix.lower()}"
     try:
         job.sheet.write(coded, codes)
     except PermissionError as e:
         raise Stop(f"{coded.name} cannot be written: close it in Excel and run again") from e
     log.info("coded copy: %s", coded)
+    if session:
+        log.info("coded with the session's mapping: the list of new answers is not written again")
+        return
     if not missing:
         log.info("every answer was found in the mapping: there is no list to send back")
         return
@@ -455,8 +469,9 @@ def close_log(log):
         log.removeHandler(h)
 
 
-def run(file, column, country_column=None, sheet=None, header_row=1, out_dir=None, check_only=False):
-    """Check the file and, unless check_only, code it. Returns 0, or 1 if a check stopped it (see the log)."""
+def run(file, column, country_column=None, sheet=None, header_row=1, out_dir=None, check_only=False, mapping=None):
+    """Check the file and, unless check_only, code it with the published mapping (or the mapping workbook
+    `mapping`). Returns 0, or 1 if a check stopped it (see the log)."""
     path = Path(file).resolve()
     out = Path(out_dir).resolve() if out_dir else path.parent
     out.mkdir(parents=True, exist_ok=True)
@@ -465,14 +480,14 @@ def run(file, column, country_column=None, sheet=None, header_row=1, out_dir=Non
     status = 0
     try:
         log.info("file: %s | %s", path, "checks only" if check_only else "checks and coding")
-        m, name = published_mapping()
-        log.info("published mapping: %s (%d answers)", name, len(m))
+        m, name = published_mapping(mapping)
+        log.info("%s mapping: %s (%d answers)", "session" if mapping else "published", name, len(m))
         job = check(path, column, country_column, sheet, header_row, set(m.country), log)
         if not check_only:
-            codes, missing = code(job, Mapping(m))
+            codes, missing = code(job, Mapping(m), session=mapping is not None)
             for s, k in Counter(v[3] for v in codes.values()).most_common():
                 log.info("coding_status %r: %d rows", s, k)
-            write_outputs(job, codes, missing, out, path.stem, log)
+            write_outputs(job, codes, missing, out, path.stem, log, session=mapping is not None)
         log.info("done")
     except Stop as e:
         log.error("%s", e)

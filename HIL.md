@@ -41,8 +41,9 @@ folder of the repository, directly in the folder (not in a subfolder):
   published mapping, which keeps every answer ever coded. Answers already seen are recognised and not counted
   twice.
 
-Lists from clients who code their own spreadsheets arrive in the same folder on their own: the client's AI
-assistant sends them, and the operator adds them. You do nothing for those.
+Clients who code their own spreadsheets send their new answers, already coded, to the same folder: their AI
+assistant does the searches and the client decides the judgement calls. The operator adds them. You do nothing for
+those.
 
 Complete exports of every answer (for example from Moodle) are optional; if you have them, they go in
 `input/historical_exports/`, replacing the old file of the same name.
