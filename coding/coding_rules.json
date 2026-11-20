@@ -1,0 +1,327 @@
+{
+ "_about": "Rule settings read by the code (src/institution_mapping). RULEBOOK.md names the rule each setting belongs to. Change a rule here, then re-run.",
+ "generic_exact": {
+  "_rule": "R4 - exact cleaned spellings, nothing else",
+  "NOT_SPECIFIED": [
+   "university",
+   "education",
+   "school",
+   "faculty of science",
+   "faculty of philology",
+   "faculty of technology",
+   "faculty of sciences",
+   "faculty of education",
+   "institution",
+   "institutions",
+   "research",
+   "academic",
+   "public",
+   "private",
+   "organization",
+   "college of agriculture"
+  ],
+  "NOT_APPLICABLE": [
+   "ليس لدي منظمة اعمل على نفسي"
+  ],
+  "HOSPITAL": [
+   "مستشفى خاص"
+  ]
+ },
+ "org_type_overrides": {
+  "_rule": "R7 settled decisions",
+  "0088fqs38": "COMPANY_OR_NGO"
+ },
+ "name_keywords": [
+  [
+   "teaching hospital",
+   "TEACHING_HOSPITAL"
+  ],
+  [
+   "management board|health service commission|health services commission|ministry",
+   "GOVERNMENT"
+  ],
+  [
+   "hospital|clinic|medical cent|health cent|cancer cent",
+   "HOSPITAL"
+  ],
+  [
+   "ministry|authority|agency|council|commission|government|board|bureau|department|directorate|district health|health office|county|municipal|local government",
+   "GOVERNMENT"
+  ],
+  [
+   "universit|college|polytechnic|school|academy|faculty|seminary|collage",
+   "EDUCATION"
+  ],
+  [
+   "research|institute|laborator|observatory|centre for|center for",
+   "RESEARCH"
+  ],
+  [
+   "ltd|limited|foundation|association|ngo|society|trust|network|initiative|consult|company|corporation|innovations|systems|group|colegio",
+   "COMPANY_OR_NGO"
+  ]
+ ],
+ "international": {
+  "_rule": "R2 exception - ROR record used whatever the user's country",
+  "ror_types": [
+   "nonprofit",
+   "company"
+  ],
+  "ror_ids": [
+   "01f80g185",
+   "01d9dbd65",
+   "02dg0pv02",
+   "0088fqs38",
+   "008w8py05",
+   "057ftxp55",
+   "01s6bpp92",
+   "051777d98"
+  ],
+  "_ror_ids": "WHO, Africa CDC, UNICEF, HealthNet TPO (reviewer decision), University of the People and WorldQuant (online universities); International Open University (online, client 16 Oct); UNDP (rule 6.4, 25 Oct 2026: UN agency like WHO and UNICEF)"
+ },
+ "country_exceptions": [
+  {
+   "_rule": "R2 - UNISA also for Eswatini",
+   "ror_id": "048cwvf49",
+   "countries": [
+    "SZ"
+   ]
+  }
+ ],
+ "nhs": {
+  "_rule": "R2 - one NHS for all UK users",
+  "ror_id": "02wnqcb97",
+  "country": "GB",
+  "patterns": [
+   "\\bnhs\\b",
+   "national health service"
+  ]
+ },
+ "per_country_generic": {
+  "_rule": "R5 - Ministry of Health: country ROR record, else one LOCAL ID per country, any learner count",
+  "ministry of health": {
+   "org_type": "GOVERNMENT",
+   "local_name": "Ministry of Health, {country}"
+  }
+ },
+ "not_applicable_patterns": [
+  "^i (am|m) not (in|part of|affiliated|employed|working)",
+  "\\bnot (affiliated|employed) (to|with|by)? ?(any)? ?(an )?(institution|organi[sz]ation)",
+  "^(i have )?no (organi[sz]ation|institution|affiliation|employer)\\b",
+  "^not (in|with) (an?|any) (institution|organi[sz]ation)"
+ ],
+ "name_clusters": [
+  {
+   "_rule": "R6 - reviewer Q10",
+   "pattern": "^iyna|youth neuroscience",
+   "name": "International Youth Neuroscience Association",
+   "org_type": "COMPANY_OR_NGO",
+   "verified": true
+  }
+ ],
+ "generic_keep_type_no_name": [
+  "hospital",
+  "private hospital",
+  "public hospital",
+  "government hospital",
+  "general hospital",
+  "teaching hospital",
+  "government",
+  "gov",
+  "govt",
+  "consultancy",
+  "ngo",
+  "pharmacy"
+ ],
+ "unit_keep_name_words": [
+  "college",
+  "campus",
+  "collage"
+ ],
+ "fuzzy_accept": {
+  "_rule": "P4 approved as suggestion only (reviewer confirms)",
+  "min_score": 90,
+  "margin": 5
+ },
+ "fuzzy_in_country_alternative": 85,
+ "local_min_learners": 2,
+ "generic_words": [
+  "university",
+  "universities",
+  "college",
+  "collage",
+  "school",
+  "institute",
+  "institution",
+  "academy",
+  "faculty",
+  "polytechnic",
+  "centre",
+  "center",
+  "hospital",
+  "teaching",
+  "national",
+  "state",
+  "federal",
+  "regional",
+  "international",
+  "public",
+  "private",
+  "medical",
+  "medicine",
+  "health",
+  "sciences",
+  "science",
+  "technology",
+  "technical",
+  "research",
+  "studies",
+  "education",
+  "agriculture",
+  "agricultural",
+  "management",
+  "nursing",
+  "pharmacy",
+  "applied",
+  "open",
+  "ministry",
+  "department",
+  "council",
+  "authority",
+  "agency",
+  "services",
+  "service",
+  "general",
+  "city",
+  "community",
+  "development",
+  "training",
+  "business",
+  "law",
+  "engineering",
+  "arts",
+  "social"
+ ],
+ "coverage_stopwords": [
+  "of",
+  "the",
+  "and",
+  "for",
+  "in",
+  "de",
+  "la",
+  "du",
+  "at"
+ ],
+ "subject_words": [
+  "medicine",
+  "medical",
+  "nursing",
+  "midwifery",
+  "dentistry",
+  "dental",
+  "pharmacy",
+  "pharmaceutical",
+  "veterinary",
+  "engineering",
+  "sciences",
+  "science",
+  "health",
+  "allied",
+  "arts",
+  "commerce",
+  "humanities",
+  "education",
+  "agriculture",
+  "agricultural",
+  "law",
+  "economics",
+  "business",
+  "management",
+  "technology",
+  "social",
+  "public",
+  "graduate",
+  "postgraduate",
+  "studies",
+  "research",
+  "natural",
+  "resources",
+  "environmental",
+  "computing",
+  "information",
+  "basic",
+  "applied",
+  "clinical",
+  "biomedical"
+ ],
+ "unit_words": [
+  "college",
+  "faculty",
+  "department",
+  "dept",
+  "school",
+  "institute",
+  "centre",
+  "center",
+  "unit",
+  "campus",
+  "division",
+  "programme",
+  "program",
+  "laboratory",
+  "lab",
+  "collage"
+ ],
+ "_unit_naming": "R1: a ROR-coded spelling keeps its own name only if it names a college/campus AND has a distinctive word (e.g. a town) not found in the institution's ROR names",
+ "known_places": [
+  "musanze",
+  "huye",
+  "ngoma",
+  "tumba",
+  "gishari",
+  "karongi",
+  "kitabi",
+  "kigali",
+  "ambalavayal",
+  "wondo genet",
+  "katima mulilo",
+  "okija",
+  "jhang",
+  "jauharabad",
+  "kamra",
+  "cave hill",
+  "weigang",
+  "enugu",
+  "sagamu"
+ ],
+ "_known_places": "R1: towns of named colleges/campuses that ROR lists no organisation in (extend as needed)",
+ "_org_type_map": "moved to common.ROR_TYPE (one copy for all scripts)",
+ "_decision_overrides": "moved to decisions.csv (batch overrides_14oct): they are case decisions, not rules",
+ "personal_data": {
+  "_rule": "rulebook step 0 (22 Oct 2026): an answer is removed before coding IF it contains an e-mail address, OR it is only digits and separators with 6+ digits, OR it is 1-3 letters followed by 6+ digits. Same patterns as the pipeline (ADR institution_coding, decision 9).",
+  "email_anywhere": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+  "number_whole": "[\\d\\s+\\-./()]+",
+  "number_min_digits": 6,
+  "document_whole": "[A-Za-z]{1,3}\\d{6,}"
+ },
+ "abroad_checked": {
+  "_rule": "rule 5.2: NGO/company records abroad checked by hand for a one-word or generic answer (v24 QA, 25 Oct 2026); used by the rules engine (step 7)",
+  "ror_ids": [
+   "05qm91k56",
+   "03f2wzg57",
+   "038wq4t12",
+   "05c48af58",
+   "00fszdj92",
+   "0492b0q60",
+   "051n93m20",
+   "0550k1y72",
+   "00cjrc276",
+   "02t1k2015",
+   "03bnhf738",
+   "00wf4pt88",
+   "03v351c14"
+  ],
+  "_ror_ids": "INASP, ARROW (16 Oct KEEP), Jhpiego (client), Twaweza, OWSD, HJF Medical Research International, Genpact, Research4Life, Mitacs, Egis, Ambu, Management Sciences for Health, International Center for Research on Women"
+ }
+}

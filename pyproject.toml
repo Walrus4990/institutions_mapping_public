@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "institution_mapping"
+version = "26"
+description = "Maps the institution names learners typed to ROR IDs, LOCAL IDs and an org_type"
+requires-python = ">=3.10"
+license = {text = "MIT (code); CC BY 4.0 (the mapping data); see README.md, Licence"}
+dependencies = ["pandas>=2.0", "openpyxl>=3.1"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "radon", "interrogate"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests", "tools"]
+extend-exclude = ["archive"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "SIM", "C901", "N", "PLR0912", "PLR0915"]
+ignore = [
+    "B905",    # zip() over columns of one table: always the same length
+    "N818",    # stages/apply_decisions.Refused reads better than RefusedError
+    "N806",    # pandas convention: single-letter frame names (m, o, d) inside functions
+    "SIM108",  # a ternary is not always clearer than if/else
+    "SIM905",  # long word lists read better as """one two three""".split()
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.interrogate]
+# a stage's run(ctx) is described by its module docstring; __init__ by its class
+ignore-regex = ["^run$"]
+ignore-init-method = true
+ignore-nested-functions = true
+ignore-init-module = true
+ignore-private = true
+ignore-magic = true

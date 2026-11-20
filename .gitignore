@@ -1,0 +1,10 @@
+# the full ROR dump (input of tools/reduce_ror_dump.py) and unzipped snapshots
+*-ror-data.csv
+coding/registries/ror/*.csv
+# Python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+# archive folders older than the previous version (release moves them here)
+archive/old/

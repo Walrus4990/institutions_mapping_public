@@ -1,0 +1,5 @@
+name,country,parent_ror_id,reason
+Bharatpur Eye Hospital,NP,00ck9qk95,"run by Nepal Netra Jyoti Sangh (nnjs.org.np); own LOCAL ID, the NGO in ror_parent_ids (client 25 Oct 2026)"
+Mechi Eye Hospital,NP,00ck9qk95,"run by Nepal Netra Jyoti Sangh; own LOCAL ID, the NGO in ror_parent_ids (client 25 Oct 2026)"
+Himalaya Eye Hospital,NP,00ck9qk95,"run by Nepal Netra Jyoti Sangh (heh.org.np); own LOCAL ID, the NGO in ror_parent_ids (client 25 Oct 2026)"
+Mildmay Uganda Hospital,UG,00xas1432,"hospital of the NGO Mildmay Uganda (mildmay.or.ug); own LOCAL ID, the NGO in ror_parent_ids (client 25 Oct 2026)"
