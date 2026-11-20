@@ -80,6 +80,7 @@ def test_judgement_call_flags():
     # not flagged: WHO (international by rule), Makerere (plain), Harvard (its own name), MIT (decided by a person
     # already), xyz (not coded)
     assert d.columns.tolist() == judgement_calls.COLUMNS and (d.answer == "").all()
+    assert d.gid.tolist() == list(range(1, len(d) + 1))  # row numbers for tools/add_decisions.py
     assert "alternative" in d.set_index("raw_institution").at["St Mary's Mission Hospital", "why_check"]
 
 

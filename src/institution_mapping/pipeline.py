@@ -6,6 +6,8 @@ A run reads three folders of the repository and writes only into OUT_DIR:
             codes), coding_rules.json and decisions.csv
   output/   the published mapping, read as the record of every answer coded so far
 coding/ is copied to OUT_DIR/work/coding first: stages that issue LOCAL IDs update that copy, never the repository.
+The copy's decisions.csv is the ledger followed by the decisions files of input/ (rulebook 9.6), re-written at every
+run, also one that starts at a later stage.
 `python -m institution_mapping release OUT_DIR` copies the result back (see README, "Releasing").
 """
 
@@ -20,7 +22,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .core.ledger import Ledger
+from .core.ledger import Ledger, with_decision_files
 from .core.register import Register
 
 REPO = Path(__file__).resolve().parents[2]
@@ -164,6 +166,8 @@ def run(out_dir, in_dir=None, ror_dir=None, coding=CODING, stages=None):
 
             build(ror, inp / "raw.csv")
         stages = STAGES
+    # the decisions to apply, re-read at every run, also one that starts at a later stage (rulebook 9.6)
+    with_decision_files(coding / "decisions.csv", INPUT, ctx.c("decisions.csv"))
     start_register = pd.read_csv(ctx.registry("local_ids.csv"), dtype=str, keep_default_na=False)
     for name in stages:
         t0 = time.time()

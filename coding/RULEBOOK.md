@@ -392,6 +392,10 @@ candidate is left:
 5. With a ROR ID.
 6. The one named first.
 
+A university and its teaching hospital named together are one organisation, coded as the teaching hospital alone
+(6.3): its own ROR record IF it has one (e.g. "UoN / KNH" (KE) → Kenyatta National Hospital), ELSE the university's
+ID with the teaching hospital's coded name.
+
 Evidence: "two organisations named; coded X (<the test that decided>); not coded: Y". Code:
 `stages/contained_names.py` (sends the answer to step 7), `stages/apply_decisions.py`.
 
@@ -573,9 +577,23 @@ order, with the reason and the alternative:
    names a church, a mission or an NGO: part of its owner, or its own organisation?
 4. `two organisations`: rule 5.5 chose one of two organisations named.
 
-Rows a person has decided already (a client or human-review decision) are left out. The person in the loop answers
-each row (HIL.md step 4), in the chat with the operator AI or in the spreadsheet; the answer is recorded as a client
-decision (9.2), with the person's words as the rationale. Code: `judgement_calls.py` (`draft`, `this_round`).
+Rows a person has decided already (a client or human-review decision) are left out. Each row also carries the rules
+its proposal rests on and its precedent: the organisations the answer may name, with the number of answers coded to
+each, how answers sharing its distinctive words were coded, the decisions a person took on such answers, and the ROR
+links between these organisations (`precedents`). The proposal put to the person is the code the rulebook gives,
+which may differ from the run's code; it is consistent with the precedent, or says why not. One row is put at a time.
+The person in the loop (on the client path, the client) answers each row (HIL.md step 4), in the chat or in the
+spreadsheet; the answer is recorded as a client decision (9.2), with the person's words as the rationale. An answer
+that departs from the rulebook or from the precedent for every such answer is a rule change, made in this rulebook,
+not a decision for one row. Code: `judgement_calls.py` (`draft`, `this_round`), `precedents.py` (`Precedents`).
+
+9.6 **A client session's decisions.** A client's session (11.8) records its decisions in its own decisions file,
+`input/decisions_<date>_<file>.csv`, in the ledger's columns and numbered `<file name>-0001`, ... A run applies the
+ledger first and then the decisions files of `input/`, in the order of their names, as if they were at the end of
+batch `decisions`; it re-reads them at every run, also one that starts at a later stage. Before a release, `take-in`
+appends them to the ledger in the same order, with the next D-numbers, and deletes them, so the next run applies the
+same decisions in the same order; `release` stops while a decisions file is waiting in `input/`. Code:
+`core/ledger.py` (`with_decision_files`, `take_in`), `pipeline.py`, `__main__.py` (`release`).
 
 ## 10. Rule settings for named organisations
 
@@ -597,12 +615,13 @@ Code: `stages/rules_engine.py`, `stages/typo_pass.py`, `stages/apply_decisions.p
 ## 11. Coding a sheet (client path)
 
 11.1 **Two ways of working.** On the pipeline path (sections 1-10) the M&E pipeline matches its answers to the
-published mapping itself and sends the answers it did not find as a batch to `input/`; a run codes them and a release
-publishes the new mapping. On the client path (this section) anyone with a copy of the repository codes the
-institution column of their own spreadsheet from the published mapping, with one command, on their own computer. The
-client path makes no code: an answer that is not in the mapping is listed (11.6) and stays uncoded in the sheet until
-a release has coded it and the sheet is coded again. The AI assistant that runs the command follows `AGENTS.md`; the
-person's guide is `README.md`. Code: `code_sheet.py`, `__main__.py`.
+published mapping itself and sends the answers it did not find as a batch to `input/`; the operator codes them and a
+release publishes the new mapping. On the client path (this section) a client codes the institution column of their
+own spreadsheet in one session of the AI assistant they choose, which follows `AGENTS.md`: the lookup codes the
+answers the mapping knows (11.3); the same session codes the others by this rulebook's process, with the client
+deciding the judgement calls (11.8); the client gets the whole sheet back coded; and the session sends what it added
+to the repository (11.7), so that the next lookup knows it. The AI codes only through that process: never by writing a
+code into the sheet itself. The person's guide is `README.md`. Code: `code_sheet.py`, `__main__.py`.
 
 11.2 **Checks first.** The file is checked before anything is coded. The command stops, and writes only the log, IF
 the file does not exist; OR it is not `.xlsx` or `.csv` (an `.xls` file is saved as `.xlsx` first); OR it cannot be
@@ -619,6 +638,7 @@ the AI assistant; the log holds no answer text; sending the list (11.7) adds to 
 `institution_id`, `norhed` and `coding_status`. The client's own cells are not changed. An answer is found IF the
 mapping has the same answer (3.6: the same pipeline key or the same cleaned text) in the same country (11.4); it
 takes that row's outcome. The mapping has one outcome per answer and country (3.6), so the row chosen does not matter.
+The mapping is the published one; at the end of a session (11.8) it is the session's own run's workbook (`--mapping`).
 
 | `coding_status` | When | Added values |
 | --- | --- | --- |
@@ -628,11 +648,12 @@ takes that row's outcome. The mapping has one outcome per answer and country (3.
 | `type only (<org_type>)` | the mapping row is coding complete without an ID | none |
 | `not identified` | the mapping row is not identified | none |
 | `not in mapping` | no mapping row: the answer is listed (11.6) | none |
+| `not coded: left off the list` | with a session's mapping (11.8): no row, because the client took it off the list (a person's name); no list is written | none |
 | `country needed` | no country, and the answer has different outcomes in different countries (11.4) | none |
 | `personal data, not coded` | the answer is personal data (step 0) | none |
 | `no answer` | the cell is empty | none |
 
-Code: `code_sheet.py` (`Mapping`, `code`).
+Code: `code_sheet.py` (`Mapping`, `code`, `published_mapping`).
 
 11.4 **Country.** The country is a two-letter code, or a country name as ROR writes it or as listed in
 `code_sheet.py` (`COUNTRY_ALIASES`) and `build_input.py` (`COUNTRY_SPELLINGS`), in any capitals. A row with no
@@ -654,13 +675,30 @@ number of rows of the sheet; a row without a recognised country has an empty cou
 addresses and numbers only: the person looks the list over for people's names before sending it. Code:
 `code_sheet.py` (`unmapped_table`, `write_outputs`).
 
-11.7 **Sending the list.** The list goes to the repository as a pull request that adds it to `input/`; the
+11.7 **Sending what the session added.** One pull request to the repository adds the list (11.6) and the session's
+decisions file (9.6) to `input/`, and the LOCAL IDs the session's run issued to `coding/registries/local_ids.csv`; the
 maintainer merges it, and the client needs no GitHub account. First the list is checked: its name
 (`unmapped_institutions_<date>_<file>.xlsx`), its three columns, every row in their form (an answer; a two-letter code
-or nothing; a whole number of learners), and no personal data (step 0). A list that fails is not sent. Then the key is
-checked, and that no list of the same name is in `input/` already (it was sent before). A branch
-`client-list/<list name>` (numbered IF it exists) gets the list, and the pull request is opened; its description holds
-counts only, no answer text. The key is a GitHub access key of the maintainer's, limited to this repository (README,
-"Setting up the submit key"). It is saved once on the person's computer, in their own user folder, never in the
-repository folder, and it is never printed or written to the log. `--check-only` checks the list and the key and sends
-nothing. Code: `submit.py` (`check_list`, `send`, `save_key`).
+or nothing; a whole number of learners), and no personal data (step 0). Then the decisions file: the ledger's
+columns, every row with an answer, a target and a rationale, no personal data. A list or decisions file that fails is
+not sent. Then the key is checked, and that no list of the same name is in `input/` already (it was sent before).
+IF the session issued LOCAL IDs AND the published register has changed since the session's copy was downloaded THEN
+nothing is sent: the IDs could clash, and the session runs again on a fresh copy. Two pull requests that add LOCAL IDs
+to the same published register cannot both be merged: the second one conflicts, and its session runs again. A branch
+`client-list/<list name>` (numbered IF it exists) gets the files, and the pull request is opened; its description
+holds counts only, no answer text. The key is a GitHub access key of the maintainer's, limited to this repository.
+It is saved once on the person's computer, in their own user folder, never in the repository folder, and it is never printed or written to the log. `--check-only` checks everything and sends
+nothing. Code: `submit.py` (`check_list`, `check_decisions`, `new_local_ids`, `published_register`, `send`,
+`save_key`).
+
+11.8 **The session codes the answers the mapping did not know.** In the same session, with a copy of the repository
+downloaded for it: the list (11.6) goes into the copy's `input/`, and the mapping is run (about 25 minutes; the
+client is told to come back later). Then, as the operator does (README, "Coding new answers"): the worklist
+(`worklist`) shows what the rules left open; each group is searched on the web, and each result is recorded with its
+source in the session's decisions file (9.6), with `tools/add_decisions.py --to`; the mapping is run again from
+`apply_decisions`. The judgement calls (9.5, `judgement-calls`) are put to the client, who knows the organisations,
+one at a time in plain language; each answer is recorded as a client decision (with `override` where it changes a
+coded row), and the mapping is run again from `apply_decisions`. Then the client's sheet is coded again with the
+session's mapping (11.3), so that the client gets it back whole: every answer coded, or not identified with the
+reason. Last, the session sends what it added (11.7). Code: `worklist.py`, `judgement_calls.py`,
+`tools/add_decisions.py`, `code_sheet.py`, `submit.py`.

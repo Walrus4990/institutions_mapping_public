@@ -1,22 +1,33 @@
-"""The client path's last step (rulebook 11.7): the list is checked, then sent as a pull request; the key is never
-shown. GitHub is replaced by a fake: no test reaches the network."""
+"""The client path's last step (rulebook 11.7): the list, the session's decisions and its new LOCAL IDs are checked,
+then sent as one pull request; the key is never shown. GitHub is replaced by a fake: no test reaches the network."""
 
+import base64
 import io
 
 import pandas as pd
 import pytest
 
 from institution_mapping import submit as sm
+from institution_mapping.pipeline import CODING
 
 KEY = "github_pat_" + "x" * 40
+LIST = "unmapped_institutions_2026-11-20_survey.xlsx"
+REGISTER_COLUMNS = ["local_id", "name", "name_key", "other_names", "country", "status", "replaced_by", "reason"]
+REGISTER_COLUMNS += ["source"]
+PUBLISHED = [["LOCAL-0001", "Alpha College", "alpha college", "", "KE", "active", "", "", "web"]]
+
+
+def register_text(rows):
+    return pd.DataFrame(rows, columns=REGISTER_COLUMNS).to_csv(index=False, lineterminator="\n")
 
 
 class FakeGitHub:
     """Answers like GitHub; records the calls. `answers` overrides (method, path prefix) -> (status, body)."""
 
-    def __init__(self, answers=None, existing_branches=()):
+    def __init__(self, answers=None, existing_branches=(), register=PUBLISHED):
         self.repo, self.calls, self.answers = "owner/repo", [], dict(answers or {})
         self.branches = set(existing_branches)
+        self.register = register_text(register)
 
     def request(self, method, path, body=None):
         self.calls.append((method, path, body))
@@ -27,6 +38,8 @@ class FakeGitHub:
             return 200, {"default_branch": "main", "permissions": {"push": True}}
         if method == "GET" and path.startswith("/git/ref/heads/"):
             return 200, {"object": {"sha": "abc"}}
+        if method == "GET" and path.startswith(f"/contents/{sm.REGISTER}"):
+            return 200, {"content": base64.b64encode(self.register.encode()).decode(), "sha": "regsha"}
         if method == "GET" and path.startswith("/contents/"):
             return 404, {"message": "Not Found"}
         if method == "POST" and path == "/git/refs":
@@ -41,47 +54,138 @@ class FakeGitHub:
             return 201, {"html_url": "https://github.com/owner/repo/pull/7"}
         raise AssertionError((method, path))
 
+    def puts(self):
+        """{path: decoded content} of the files sent."""
+        return {
+            p.removeprefix("/contents/"): base64.b64decode(b["content"]).decode("utf-8", "replace")
+            for m, p, b in self.calls
+            if m == "PUT"
+        }
 
-def a_list(folder, rows=None, name="unmapped_institutions_2026-11-20_survey.xlsx"):
+
+@pytest.fixture
+def copy(tmp_path, monkeypatch):
+    """A session's copy: its input/ and its LOCAL register (the published one at download)."""
+    (tmp_path / "input").mkdir()
+    (tmp_path / "registries").mkdir()
+    (tmp_path / "registries" / "local_ids.csv").write_text(register_text(PUBLISHED), encoding="utf-8")
+    monkeypatch.setattr(sm, "INPUT", tmp_path / "input")
+    monkeypatch.setattr(sm, "REGISTRIES", tmp_path / "registries")
+    return tmp_path
+
+
+def a_list(folder, rows=None, name=LIST):
     rows = rows or [["Nowhere College", "KE", 2], ["nowhere institute", "", 1]]
     path = folder / name
     pd.DataFrame(rows, columns=sm.LIST_COLUMNS).to_excel(path, sheet_name="unmapped", index=False)
     return path
 
 
+def a_decisions_file(copy, rows=None):
+    columns = list(pd.read_csv(CODING / "decisions.csv", nrows=0).columns)
+    rows = rows or [
+        dict(
+            raw_institution="Nowhere College",
+            country="KE",
+            target="LOCAL",
+            name="Nowhere College",
+            rationale_type="source",
+            rationale="its website",
+            source="https://example.org",
+        )
+    ]
+    d = pd.DataFrame([{c: r.get(c, "") for c in columns} for r in rows])
+    d["id"] = [f"decisions_2026-11-20_survey-{i:04d}" for i in range(1, len(d) + 1)]
+    d["batch"] = "decisions"
+    path = copy / "input" / "decisions_2026-11-20_survey.csv"
+    d.to_csv(path, index=False)
+    return path
+
+
+def a_run(copy, new_rows):
+    reg = copy / "run" / "work" / "coding" / "registries"
+    reg.mkdir(parents=True)
+    (reg / "local_ids.csv").write_text(register_text(PUBLISHED + new_rows), encoding="utf-8")
+    return copy / "run"
+
+
+NEW = [["LOCAL-0002", "Nowhere College", "nowhere college", "", "KE", "active", "", "", "https://example.org"]]
+
+
 def log_of(folder):
     return (folder / "survey_coding_log.txt").read_text(encoding="utf-8")
 
 
-def test_sends_the_list_as_a_pull_request(tmp_path):
+def test_sends_a_list_alone(copy):
     gh = FakeGitHub()
-    assert sm.submit(a_list(tmp_path), github=gh) == 0
+    assert sm.submit(a_list(copy), github=gh) == 0
     methods = [(m, p.split("?")[0]) for m, p, _ in gh.calls]
     assert methods == [
         ("GET", ""),
-        ("GET", "/contents/input/unmapped_institutions_2026-11-20_survey.xlsx"),
+        ("GET", f"/contents/input/{LIST}"),
+        ("GET", f"/contents/{sm.REGISTER}"),
         ("GET", "/git/ref/heads/main"),
         ("POST", "/git/refs"),
-        ("PUT", "/contents/input/unmapped_institutions_2026-11-20_survey.xlsx"),
+        ("PUT", f"/contents/input/{LIST}"),
         ("POST", "/pulls"),
     ]
     pr = gh.calls[-1][2]
     assert pr["head"] == "client-list/unmapped_institutions_2026-11-20_survey" and pr["base"] == "main"
     assert "2 answers" in pr["body"] and "Nowhere" not in pr["body"]  # counts only, no answer text
-    assert "sent: the pull request is https://github.com/owner/repo/pull/7" in log_of(tmp_path)
+    assert "sent: the pull request is https://github.com/owner/repo/pull/7" in log_of(copy)
 
 
-def test_a_second_list_of_the_same_name_gets_a_numbered_branch(tmp_path):
+def test_sends_the_list_the_decisions_and_the_new_local_ids(copy):
+    gh = FakeGitHub()
+    a_decisions_file(copy)
+    assert sm.submit(a_list(copy), run_dir=a_run(copy, NEW), github=gh) == 0
+    sent = gh.puts()
+    assert set(sent) == {f"input/{LIST}", "input/decisions_2026-11-20_survey.csv", sm.REGISTER}
+    assert sent[sm.REGISTER] == register_text(PUBLISHED + NEW)  # the published register, then the new rows
+    assert [b.get("sha") for m, p, b in gh.calls if m == "PUT" and p.endswith("local_ids.csv")] == ["regsha"]
+    body = gh.calls[-1][2]["body"]
+    assert "Decisions recorded in the session: 1. New LOCAL IDs: 1." in body
+
+
+def test_new_local_ids_are_not_sent_when_the_published_register_changed(copy):
+    other = [["LOCAL-0002", "Another Clinic", "another clinic", "", "UG", "active", "", "", "web"]]
+    gh = FakeGitHub(register=PUBLISHED + other)
+    a_decisions_file(copy)
+    assert sm.submit(a_list(copy), run_dir=a_run(copy, NEW), github=gh) == 1
+    assert "could clash" in log_of(copy) and not gh.puts()
+
+
+def test_a_changed_register_does_not_matter_without_new_local_ids(copy):
+    other = [["LOCAL-0002", "Another Clinic", "another clinic", "", "UG", "active", "", "", "web"]]
+    assert sm.submit(a_list(copy), run_dir=a_run(copy, []), github=FakeGitHub(register=PUBLISHED + other)) == 0
+
+
+@pytest.mark.parametrize(
+    ("rows", "run", "error"),
+    [
+        (None, False, "give the folder the mapping was run into"),
+        ([dict(raw_institution="x", country="KE", target="NS")], True, "lack an answer, a target or a rationale"),
+        ([dict(raw_institution="a@b.org", country="KE", target="UNC", rationale_type="rule")], True, "personal data"),
+    ],
+)
+def test_decisions_that_are_not_sent(copy, rows, run, error):
+    a_decisions_file(copy, rows)
+    gh = FakeGitHub()
+    assert sm.submit(a_list(copy), run_dir=a_run(copy, []) if run else None, github=gh) == 1
+    assert error in log_of(copy) and gh.calls == []
+
+
+def test_a_second_list_of_the_same_name_gets_a_numbered_branch(copy):
     gh = FakeGitHub(existing_branches={"client-list/unmapped_institutions_2026-11-20_survey"})
-    assert sm.submit(a_list(tmp_path), github=gh) == 0
+    assert sm.submit(a_list(copy), github=gh) == 0
     assert gh.calls[-1][2]["head"].endswith("_survey-2")
 
 
-def test_check_only_sends_nothing(tmp_path):
+def test_check_only_sends_nothing(copy):
     gh = FakeGitHub()
-    assert sm.submit(a_list(tmp_path), check_only=True, github=gh) == 0
-    assert [m for m, _, _ in gh.calls] == ["GET"]
-    assert "nothing was sent" in log_of(tmp_path)
+    assert sm.submit(a_list(copy), check_only=True, github=gh) == 0
+    assert {m for m, _, _ in gh.calls} == {"GET"}
+    assert "nothing was sent" in log_of(copy)
 
 
 @pytest.mark.parametrize(
@@ -90,13 +194,13 @@ def test_check_only_sends_nothing(tmp_path):
         ({("GET", ""): (401, {"message": "Bad credentials"})}, "wrong or has expired"),
         ({("GET", ""): (404, {"message": "Not Found"})}, "was not found with this key"),
         ({("GET", ""): (200, {"default_branch": "main", "permissions": {"push": False}})}, "not send to it"),
-        ({("GET", "/contents/"): (200, {})}, "was sent before"),
+        ({("GET", "/contents/input/"): (200, {})}, "was sent before"),
         ({("POST", "/pulls"): (403, {"message": "forbidden"})}, "may not do this (opening the pull request)"),
     ],
 )
-def test_github_refusals_are_explained(tmp_path, answers, error):
-    assert sm.submit(a_list(tmp_path), github=FakeGitHub(answers)) == 1
-    log = log_of(tmp_path)
+def test_github_refusals_are_explained(copy, answers, error):
+    assert sm.submit(a_list(copy), github=FakeGitHub(answers)) == 1
+    log = log_of(copy)
     assert "ERROR" in log and error in log, log
 
 
@@ -109,18 +213,18 @@ def test_github_refusals_are_explained(tmp_path, answers, error):
         ([["Nowhere College", "KE", 0]], None, "not in the list's form"),
     ],
 )
-def test_lists_that_are_not_sent(tmp_path, rows, name, error):
-    path = a_list(tmp_path, rows, name or "unmapped_institutions_2026-11-20_survey.xlsx")
+def test_lists_that_are_not_sent(copy, rows, name, error):
+    path = a_list(copy, rows, name or LIST)
     gh = FakeGitHub()
     assert sm.submit(path, github=gh) == 1
     assert gh.calls == []
-    log = (tmp_path / f"{'survey' if name is None else 'my_list'}_coding_log.txt").read_text(encoding="utf-8")
+    log = (copy / f"{'survey' if name is None else 'my_list'}_coding_log.txt").read_text(encoding="utf-8")
     assert error in log, log
 
 
-def test_the_list_is_checked_before_the_key(tmp_path):
-    assert sm.submit(a_list(tmp_path), key_file=tmp_path / "none.txt") == 1
-    assert "no key is saved on this computer yet" in log_of(tmp_path)
+def test_the_list_is_checked_before_the_key(copy):
+    assert sm.submit(a_list(copy), key_file=copy / "none.txt") == 1
+    assert "no key is saved on this computer yet" in log_of(copy)
 
 
 def test_save_key_from_a_file_and_from_a_paste(tmp_path, monkeypatch, capsys):
@@ -139,8 +243,22 @@ def test_save_key_from_a_file_and_from_a_paste(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "other.txt").exists()
 
 
-def test_the_key_is_never_in_the_log(tmp_path):
-    key_file = tmp_path / "key.txt"
+def test_the_key_is_never_in_the_log(copy):
+    key_file = copy / "key.txt"
     key_file.write_text(KEY, encoding="utf-8")
-    sm.submit(a_list(tmp_path), key_file=key_file, github=FakeGitHub())
-    assert KEY not in log_of(tmp_path)
+    sm.submit(a_list(copy), key_file=key_file, github=FakeGitHub())
+    assert KEY not in log_of(copy)
+
+
+def test_a_note_to_the_maintainer_goes_into_the_description(copy):
+    gh = FakeGitHub()
+    assert sm.submit(a_list(copy), github=gh, note="Should a university with its hospital be the hospital?") == 0
+    assert gh.calls[-1][2]["body"].endswith(
+        "Note from the session: Should a university with its hospital be the hospital?"
+    )
+
+
+def test_data_sent_to_github_is_declared_as_json():
+    gh = sm.GitHub(KEY)
+    assert gh.headers(True)["Content-Type"] == "application/json" and "Content-Type" not in gh.headers(False)
+    assert gh.headers(False)["Authorization"] == f"Bearer {KEY}"

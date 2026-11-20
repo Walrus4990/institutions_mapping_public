@@ -16,30 +16,36 @@ Current version: v26 (26 Oct 2026): 11,163 answers, 22,086 learners.
 - **Pipeline path.** The M&E pipeline looks up its learners' answers in the published mapping itself, and sends the
   answers it did not find to `input/`. An operator codes them and publishes a new version of the mapping. The person
   in the loop's guide is [`HIL.md`](HIL.md); the operator's steps are below, from "Quick start".
-- **Client path.** You code the institution column of your own spreadsheet with the published mapping, with an AI
-  assistant on your computer. Your file stays on your computer. Answers the mapping does not know yet are listed in a
-  separate file, which the assistant sends to the maintainer of the mapping; they are coded in its next version.
+- **Client path.** You code the institution column of your own spreadsheet, in one session with an AI assistant of
+  your choice. The mapping codes the answers it knows; the assistant codes the others with this repository's process
+  (rules, web searches, and your answers to the judgement calls); you get your whole sheet back coded; and the
+  assistant sends the new codes to the maintainer, so that the mapping knows them next time.
 
 ## Coding your own spreadsheet
 
-You need an AI assistant that can run programs on your computer, and Python on that computer. You do not need to
-download anything yourself, know this website, or have a GitHub account: the assistant does the technical part.
+You need an AI assistant that you may use with your file (it holds personal data), that can run programs (Python)
+and search the web. You do not need to download anything yourself, know this website, or have a GitHub account: the
+assistant does the technical part.
 
 **Each time**
 1. Open your AI assistant, paste the email you received from the maintainer of the mapping, and attach your file.
 2. Answer its questions. It checks your file first and tells you if anything needs fixing.
-3. You get back a copy of your file with four columns added.
-4. If some answers are new to the mapping, the assistant shows you the list. Tell it if any of them is a person's
-   name; it removes those and sends the rest to the maintainer. They are coded in the next version of the mapping:
-   code your file again then.
+3. It codes every answer the mapping knows, and shows you the list of the others. Tell it if any of them is a person's
+   name; it removes those.
+4. It codes the others: this takes about 25 minutes, then a web search for each. You can come back later.
+5. It asks you about the answers that could be read more than one way (an acronym, a hospital run by a church, an
+   answer naming two organisations). You know these organisations best: your answer decides.
+6. You get back a copy of your file with four columns added, every answer coded or marked "not identified" with the
+   reason.
+7. It sends the new codes to the maintainer, so that the mapping knows them next time.
 
-The first time, the assistant also saves a key that lets it send that list. The maintainer sends you the key
+The first time, the assistant also saves a key that lets it send the new codes. The maintainer sends you the key
 separately, as a small file. Keep it to yourself.
 
 **Your file**
 - An Excel workbook (`.xlsx`) or a CSV file. An old `.xls` file: open it in Excel and save it as "Excel Workbook".
 - One row per answer (for example, one per learner), with the column headers in one row, normally the first.
-- A column with the institution exactly as people typed it.
+- A column with the institution exactly as people typed it. Do not tidy it up first.
 - Best also a column with the learner's country, as a two-letter code (`KE`) or a name (`Kenya`). Without a country,
   an answer is coded only when it means the same organisation in every country.
 - Close the file in Excel before you start.
@@ -49,8 +55,8 @@ separately, as a small file. Keep it to yourself.
   (a ROR ID such as `02y9nww90`, which you can look up at `https://ror.org/02y9nww90`, or a LOCAL ID such as
   `LOCAL-0494` for an organisation that is not in ROR), `norhed` (`yes` if the organisation is a NORHED partner) and
   `coding_status`.
-- `unmapped_institutions_<date>_<file>.xlsx`, only if some answers are new to the mapping: the list that is sent to
-  the maintainer.
+- `unmapped_institutions_<date>_<file>.xlsx`, only if some answers were new to the mapping: the list that is sent to
+  the maintainer, with the new codes.
 - `<file>_coding_log.txt`: what the checks found, for the assistant.
 
 **What `coding_status` means**
@@ -62,7 +68,8 @@ separately, as a small file. Keep it to yourself.
 | `organisation not named (NOT_SPECIFIED)` | The answer names no organisation ("student", "university"). |
 | `type only (...)` | Only the kind of organisation is known, for example `type only (HOSPITAL)`. |
 | `not identified` | The mapping knows this answer but could not identify it safely. |
-| `not in mapping` | The answer is new to the mapping: it is on the list to send back. |
+| `not in mapping` | The answer is new to the mapping (only before the assistant has coded the new answers). |
+| `not coded: left off the list` | You told the assistant this answer is a person's name, so it was not coded. |
 | `country needed` | The answer means different organisations in different countries: add the country. |
 | `personal data, not coded` | The answer is an e-mail address or an ID or phone number. |
 | `no answer` | The cell is empty. |
@@ -80,20 +87,18 @@ The rules of the client path are section 11 of [`coding/RULEBOOK.md`](coding/RUL
 > You can now code the institution names in your own spreadsheets yourself: for each answer, the organisation's
 > name, its ID and whether it is a NORHED partner.
 >
-> Each time: open your AI assistant (one that can run programs on your computer), paste this whole email into the
-> chat and attach your Excel file. Then answer its questions. It checks your file first and tells you if anything
-> needs fixing; you get back a copy of your file with four columns added.
+> Each time: open your AI assistant (one you may use with your file, that can run programs and search the web), paste
+> this whole email into the chat and attach your Excel file. Then answer its questions. It codes every answer we know
+> straight away, and the others with a web search, which takes about half an hour: you can come back later. It asks
+> you about the answers that could be read more than one way; you know these organisations best. You get back your
+> whole file coded, and the assistant sends the new codes to us, so that everyone has them next time.
 >
-> Answers we do not know yet are collected in a short list. The assistant shows it to you and, once you have
-> confirmed that it holds no names of people, sends it to us. We add them to the next version: code your file
-> again then.
->
-> The first time, the assistant asks for a small key file that lets it send the list to us. We send it to you
+> The first time, the assistant asks for a small key file that lets it send the new codes to us. We send it to you
 > separately. Please keep it to yourself.
 >
 > For the AI assistant: follow `AGENTS.md` in the public repository https://github.com/Walrus4990/institutions_mapping_public.
-> It tells you how to download the latest version, check and code the file, and send the list. The person does not
-> need to know anything about the repository.
+> It tells you how to download the latest version, code the file, code the new answers with the client, and send them.
+> The person does not need to know anything about the repository.
 
 ## Quick start
 
@@ -147,6 +152,7 @@ src/institution_mapping/      the code (a Python package)
   worklist.py                 after a run: what became of each list's answers, and what is left to search
   search.py                   the search's preparation: decided before?, ROR candidates, groups (used by worklist)
   judgement_calls.py          the draft list of judgement calls (rule 9.5)
+  precedents.py               how similar answers were coded before, for each judgement call (rule 9.5)
   changes.py                  the release's changes log and version check
   build_input.py              the input of a run, from input/ and the published mapping (rule 1.4)
   core/                       shared building blocks
@@ -208,7 +214,8 @@ run's `OUT_DIR/work`, which is quicker when only decisions changed.
    Its three steps are in `search.py`; the scripts `tools/check_against_ledger.py`, `tools/ror_candidates.py` and
    `tools/group_uncoded.py` run each step on its own. During the search, `tools/find_ror.py` looks up ROR records by
    words.
-3. Search the web for each group: "learner's country + answer".
+3. Search the web for each group: "learner's country + answer". (A client's session does steps 2-6 itself, recording
+   its decisions in its own decisions file in `input/`, rulebook 9.6 and 11.8.)
 4. Record each result as a row of `coding/decisions.csv` with `batch` = `decisions` (by hand, or from a short
    worksheet with `tools/add_decisions.py`):
 
@@ -229,9 +236,11 @@ run's `OUT_DIR/work`, which is quicker when only decisions changed.
 5. Run again (`--from-stage apply_decisions`) and read `OUT_DIR/decisions_report.csv`. A decision is refused without
    a rationale, on a decided row without `override`, for a ROR record abroad that rule 5.2 does not allow, or for
    `LOCAL` without a name. `worklist` again shows what is left.
-6. Draft the judgement calls (rulebook 9.5) and go through them with the person in the loop (`CLAUDE.md`):
+6. Draft the judgement calls (rulebook 9.5) and go through them with the person in the loop, one answer per message
+   (`CLAUDE.md`); `precedents` shows how similar answers were coded before:
    ```
    python -m institution_mapping judgement-calls OUT_DIR
+   python -m institution_mapping precedents OUT_DIR "answer" CC --proposed ID
    ```
 
 ## Releasing
@@ -242,6 +251,8 @@ python tools/compare_workbooks.py /tmp/im/out/institution_mapping_final.xlsx tes
 python -m institution_mapping release /tmp/im/out      # register -> coding/registries/, workbook -> output/ and tests/reference/
 ```
 
+Decisions files that clients' pull requests added to `input/` are taken into the ledger first:
+`python -m institution_mapping take-in`, then the final run (rulebook 9.6; `release` stops while one is waiting).
 `release` first compares the new workbook with the published one. IF a row was added, removed or coded
 differently THEN the release needs the next version number: set `VERSION` in `src/institution_mapping/__init__.py`
 before the run (it is the workbook's title); `release` stops if the number does not fit what changed. It then

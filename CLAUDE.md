@@ -36,14 +36,27 @@ Start with `README.md` (repository map, how a run works), `coding/RULEBOOK.md` (
 2. Search what `OUT_DIR/worklist.csv` lists, one search per cluster; record the results with
    `tools/add_decisions.py` (README, "Coding new answers"); run again from `apply_decisions`; repeat `worklist`.
 
+### A client's pull request (rulebook 11.7)
+It adds a list and a decisions file to `input/` and, if the client's session issued any, LOCAL IDs to the register.
+1. Check the files: the list holds answers, countries and counts only; every decision has a target, a source or note
+   and a rationale; the new register rows have names and countries. Merge it. (GitHub shows a pull request whose LOCAL
+   IDs clash with an earlier one as conflicting: ask that client to run the session's last part again.)
+2. Before the next release: `python -m institution_mapping take-in` (the decisions files into `coding/decisions.csv`,
+   numbered on), then the final run; the client's answers come out as in their session.
+
 ### Judgement calls, in the chat (HIL.md step 4)
 1. `python -m institution_mapping judgement-calls OUT_DIR` drafts `OUT_DIR/judgement_calls.csv` (rule 9.5). Read
    it first: drop a flag that is plainly not a judgement call, and add one the code missed.
-2. Go through it with the person in the loop **in the chat**, one call at a time (several at once only if they
-   ask): what the learner typed and their country, the proposed organisation, why it is a judgement call, and the
-   alternative, in plain language with no code terms. Accept any wording: "yes", what to do instead, or a question.
-3. A question is answered (search if needed) before anything is recorded. An answer that changes a rule rather than
-   one row is a rule change: say so and agree it with them first.
+2. Go through it with the person in the loop **in the chat**, one answer per message, never two. Before each, read the
+   rules the row names (`rules`) and its precedent (`precedent`; in full: `precedents OUT_DIR "answer" CC
+   --proposed ID`), and propose the code the rulebook gives (it may differ from the run's code: say so). The message
+   gives, in plain language with no code terms: what the learner typed and their country, the proposal and the rule it
+   follows (with its number), how similar answers were coded before, why consistency matters, and one closed question
+   ("Shall I code it so?"), never an open one.
+3. A question from them is answered (search if needed) before anything is recorded. A correction that departs from
+   the rule or the precedent: say so, and ask whether it is about this answer only or about every answer of this kind;
+   for every answer of this kind it is a rule change, agreed with them and made in the rulebook, not a one-row
+   decision.
 4. Record each answer as a decision in `coding/decisions.csv`, batch `decisions`, `rationale_type`
    `client decision`, the person's words as `rationale` (`extra` `override` where it changes a decided row). Then
    run again from `apply_decisions`.
@@ -52,7 +65,8 @@ Start with `README.md` (repository map, how a run works), `coding/RULEBOOK.md` (
 
 ### Releasing (step 7)
 The operator AI does all of it; the maintainer only merges the pull request.
-1. IF `worklist` or the decisions changed a row THEN set `VERSION` to the next number before the final run.
+1. `python -m institution_mapping take-in` if decisions files are waiting in `input/`. IF `worklist`, the decisions or
+   a client's pull request changed a row THEN set `VERSION` to the next number before the final run.
 2. Final run; tests with `IM_RUN_DIR`; `tools/compare_workbooks.py` shows every changed cell: check that each change
    is meant (a decision or a rule change).
 3. `python -m institution_mapping release OUT_DIR`. It stops on a version number that does not fit, and writes the

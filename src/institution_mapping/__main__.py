@@ -1,14 +1,18 @@
-"""Command line: python -m institution_mapping {build-input, run, release, worklist, judgement-calls,
-code-sheet, submit, save-key} (see
-README.md)."""
+"""Command line: python -m institution_mapping COMMAND (see README.md).
+
+The operator's commands: build-input, run, worklist, judgement-calls, precedents, take-in, release; the client path's
+(rulebook 11): code-sheet, submit, save-key.
+"""
 
 import argparse
 import datetime
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
-from . import build_input, changes, code_sheet, judgement_calls, pipeline, submit, worklist
+from . import build_input, changes, code_sheet, judgement_calls, pipeline, precedents, submit, worklist
+from .core.ledger import decision_files, take_in
 
 
 def release(out_dir, date):
@@ -18,6 +22,12 @@ def release(out_dir, date):
     number is checked.
     Older pipeline batches leave input/: their answers are carried forward by the published mapping."""
     out = pipeline.Run(None, None, Path(out_dir).resolve())
+    waiting = decision_files(pipeline.INPUT)
+    if waiting:
+        raise SystemExit(
+            f"decisions files are waiting in input/ ({', '.join(f.name for f in waiting)}): take them in first "
+            "(python -m institution_mapping take-in), run again, then release (rulebook 9.6)"
+        )
     published = sorted((pipeline.REPO / "output").glob("institution_mapping_*.xlsx"))
     if published:  # the changes log and the version check, before anything is copied
         changes.check_and_log(out.o("institution_mapping_final.xlsx"), published[-1])
@@ -59,11 +69,19 @@ def operator_commands(sub):
         help="after a run: what became of the answers of the lists in input/, and what is left to search (step 7)",
     )
     w.add_argument("out_dir")
+    sub.add_parser(
+        "take-in", help="move the decisions files of input/ into coding/decisions.csv, before a release (rule 9.6)"
+    )
     j = sub.add_parser(
         "judgement-calls", help="after the decisions are applied: the draft list of judgement calls (rulebook 9.5)"
     )
     j.add_argument("out_dir")
     j.add_argument("--all", action="store_true", help="every row, not only the new or changed ones")
+    q = sub.add_parser("precedents", help="how similar answers were coded before, for a judgement call (rule 9.5)")
+    q.add_argument("out_dir", help="a run's folder (for the ROR links), or - for none")
+    q.add_argument("answer")
+    q.add_argument("country", nargs="?", default="")
+    q.add_argument("--proposed", default="", help="the ID proposed for the answer")
 
 
 def client_commands(sub):
@@ -80,12 +98,17 @@ def client_commands(sub):
     c.add_argument("--header-row", type=int, default=1, help="row that holds the headers (default 1)")
     c.add_argument("--out-dir", help="folder for the outputs and the log (default: the file's folder)")
     c.add_argument("--check-only", action="store_true", help="only check the file and write the log")
+    c.add_argument(
+        "--mapping", help="a mapping workbook to use instead of the published one (a session's run: rule 11.3)"
+    )
     u = sub.add_parser(
         "submit",
         help="client path (rulebook 11.7): send the list of answers not in the mapping as a pull request to input/",
     )
     u.add_argument("list_file", help="the list written by code-sheet: unmapped_institutions_<date>_<file>.xlsx")
+    u.add_argument("--run", help="the folder the session ran the mapping into: its new LOCAL IDs go with the list")
     u.add_argument("--check-only", action="store_true", help="only check the list and the key; send nothing")
+    u.add_argument("--note", default="", help="a note to the maintainer for the description (no person's name)")
     u.add_argument("--key-file", default=submit.KEY_FILE, help=f"where the key is saved (default {submit.KEY_FILE})")
     u.add_argument("--repo", default=submit.GITHUB_REPO, help=f"owner/name (default {submit.GITHUB_REPO})")
     k = sub.add_parser("save-key", help="save the key for submit once: from the maintainer's file, or from stdin")
@@ -94,38 +117,64 @@ def client_commands(sub):
     k.add_argument("--repo", default=submit.GITHUB_REPO, help=f"owner/name (default {submit.GITHUB_REPO})")
 
 
+def build_input_only(a):
+    """build-input: raw.csv only."""
+    with tempfile.TemporaryDirectory() as tmp:
+        ror = a.ror or tmp
+        if not a.ror:
+            pipeline.unzip_ror(ror)
+        build_input.build(ror, a.out_csv)
+
+
+def run_mapping(a):
+    """run: every stage, or the stages from --from-stage on."""
+    stages = pipeline.STAGES[pipeline.STAGES.index(a.from_stage) :] if a.from_stage else None
+    pipeline.run(a.out_dir, in_dir=a.input, ror_dir=a.ror, stages=stages)
+
+
+def take_in_decisions(a):
+    """take-in: the decisions files of input/ into the ledger (rule 9.6)."""
+    taken = take_in(pipeline.CODING / "decisions.csv", pipeline.INPUT)
+    for name, n in taken.items():
+        print(f"{name}: {n} decisions taken into coding/decisions.csv")
+    print("" if taken else "no decisions files in input/")
+
+
+def code_a_sheet(a):
+    """code-sheet: the client path's lookup (rule 11.3); its exit code."""
+    return code_sheet.run(
+        a.file, a.column, a.country_column, a.sheet, a.header_row, a.out_dir, check_only=a.check_only, mapping=a.mapping
+    )
+
+
+COMMANDS = {  # command -> function of the parsed arguments; a returned number is the exit code
+    "build-input": build_input_only,
+    "run": run_mapping,
+    "release": lambda a: release(a.out_dir, a.date),
+    "worklist": lambda a: worklist.run(a.out_dir),
+    "take-in": take_in_decisions,
+    "judgement-calls": lambda a: judgement_calls.run(a.out_dir, every_row=a.all),
+    "precedents": lambda a: precedents.run(None if a.out_dir == "-" else a.out_dir, a.answer, a.country, a.proposed),
+    "code-sheet": code_a_sheet,
+    "submit": lambda a: submit.submit(a.list_file, a.run, a.key_file, a.repo, check_only=a.check_only, note=a.note),
+    "save-key": lambda a: submit.save_key(a.file, a.key_file, a.repo),
+}
+
+
 def main(argv=None):
-    """Parse the command line and run the command."""
+    """Parse the command line and run the command. Output is UTF-8 everywhere: on Windows, output captured by an AI
+    assistant would otherwise use the local encoding and stop at the first character it cannot write."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     p = argparse.ArgumentParser(prog="python -m institution_mapping", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
     operator_commands(sub)
     client_commands(sub)
     a = p.parse_args(argv)
-    if a.command == "build-input":
-        with tempfile.TemporaryDirectory() as tmp:
-            ror = a.ror or tmp
-            if not a.ror:
-                pipeline.unzip_ror(ror)
-            build_input.build(ror, a.out_csv)
-    elif a.command == "run":
-        stages = pipeline.STAGES[pipeline.STAGES.index(a.from_stage) :] if a.from_stage else None
-        pipeline.run(a.out_dir, in_dir=a.input, ror_dir=a.ror, stages=stages)
-    elif a.command == "worklist":
-        worklist.run(a.out_dir)
-    elif a.command == "judgement-calls":
-        judgement_calls.run(a.out_dir, every_row=a.all)
-    elif a.command == "code-sheet":
-        raise SystemExit(
-            code_sheet.run(
-                a.file, a.column, a.country_column, a.sheet, a.header_row, a.out_dir, check_only=a.check_only
-            )
-        )
-    elif a.command == "submit":
-        raise SystemExit(submit.submit(a.list_file, a.key_file, a.repo, check_only=a.check_only))
-    elif a.command == "save-key":
-        raise SystemExit(submit.save_key(a.file, a.key_file, a.repo))
-    else:
-        release(a.out_dir, a.date)
+    status = COMMANDS[a.command](a)
+    if isinstance(status, int):
+        raise SystemExit(status)
 
 
 if __name__ == "__main__":

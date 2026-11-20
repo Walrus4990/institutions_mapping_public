@@ -21,7 +21,7 @@ Added
 - `AGENTS.md`: the client path's instructions for an AI assistant, written for a client who knows nothing about
   the repository (the assistant downloads, installs and runs everything, and is brief with returning clients);
   `README.md`: the person's guide ("Two ways of working", "Coding your own spreadsheet"), and for the maintainer the
-  submit key's setup and the email to a client.
+  email to a client.
 - Rule 11.7: `submit` sends the list of new answers as a pull request that adds it to `input/`, with a key of the
   maintainer's limited to this repository; `save-key` saves the key once in the person's user folder. The client
   needs no GitHub account.
@@ -34,6 +34,28 @@ Added
 - `release` compares the new workbook with the published one: it stops if the version number does not fit what
   changed, writes `docs/releases/changes_log_vNN.csv` and moves the previous version's files to `archive/`.
 
+- The client's whole session (rules 11.1, 11.8): in one session of the AI assistant the client chooses, the lookup codes
+  what the mapping knows, the same session codes the rest with this repository's process (the run, `worklist`, web
+  searches recorded with `tools/add_decisions.py --to`, the judgement calls decided by the client), codes the sheet
+  again with its own run's mapping (`code-sheet --mapping`), and sends what it added. `AGENTS.md`, README and the email
+  to clients describe it.
+- Rule 9.6: a client session's decisions file, `input/decisions_<date>_<file>.csv`. A run applies the decisions files
+  after the ledger; `take-in` moves them into `coding/decisions.csv` with the next D-numbers before a release, and
+  `release` stops while one is waiting.
+- Rule 11.7: `submit --run OUT_DIR` sends the list, the decisions file and the LOCAL IDs the session's run issued (added
+  to the register), in one pull request. It sends nothing if the session issued LOCAL IDs and the published register
+  changed since the session's copy was downloaded; two pull requests adding LOCAL IDs to the same register conflict.
+- `tools/add_decisions.py`: `--to` (a session's decisions file), `override` as a ninth worksheet field, and the
+  rationale types `client decision` and `human-review decision`. The judgement-call draft numbers its rows (`gid`), so
+  the tool records the answers from it.
+- Rule 9.5: judgement calls are put one answer per message, as a closed question: the code the rulebook gives, the
+  rule it follows, how similar answers were coded before, and why consistency matters. A correction meant for every
+  answer of its kind is a rule change, not a one-row decision. The draft gains the columns `rules` and `precedent`;
+  `precedents OUT_DIR "answer" CC` shows the organisations an answer may name (with the answers coded to each), how
+  answers sharing its words were coded, a person's earlier decisions on them, and the ROR links between them.
+  `submit --note` passes a client's point on a rule to the maintainer.
+- Rule 5.5: a university and its teaching hospital named together are coded as the teaching hospital (6.3): its own
+  ROR record if it has one ("UoN / KNH" → Kenyatta National Hospital).
 - `LICENSE` (MIT, the code) and README "Licence" (CC BY 4.0, the mapping data; ROR's data is CC0).
 - `docs/trial_data.xlsx`: 20 made-up answers with the flaws of a real export, for trying the client path.
 
@@ -54,6 +76,10 @@ Removed
   dependencies are in `pyproject.toml`).
 
 Fixed
+- `run --from-stage` kept the run's earlier copy of the decisions, so decisions recorded since the full run were not
+  applied; every run now re-reads them.
+- The command line writes UTF-8 on every system: on Windows, output captured by an AI assistant stopped at the first
+  character the local encoding could not write.
 - `tools/check_against_ledger.py` never marked an answer as needing a search: it looked for the old status label
   "uncoded".
 
