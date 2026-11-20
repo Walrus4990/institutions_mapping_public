@@ -39,7 +39,7 @@ separately, as a small file. Keep it to yourself.
 **Your file**
 - An Excel workbook (`.xlsx`) or a CSV file. An old `.xls` file: open it in Excel and save it as "Excel Workbook".
 - One row per answer (for example, one per learner), with the column headers in one row, normally the first.
-- A column with the institution exactly as people typed it. Do not tidy it up first.
+- A column with the institution exactly as people typed it.
 - Best also a column with the learner's country, as a two-letter code (`KE`) or a name (`Kenya`). Without a country,
   an answer is coded only when it means the same organisation in every country.
 - Close the file in Excel before you start.
